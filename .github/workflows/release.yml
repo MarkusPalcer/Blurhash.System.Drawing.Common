@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: Restore packages
+        run: nuget restore
+      - name: Build
+        run: dotnet build -c Release
+      - name: Test
+        run: dotnet test --verbosity normal
+      - name: Package
+        run: dotnet pack -c Release
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}   
+      - name: Publish if version has changed
+        run: dotnet nuget push **/Release/*.nupkg --skip-duplicate --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json

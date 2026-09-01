@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+        <PackageReference Include="Blurhash.Core" Version="4.0.0" />
+        <PackageReference Include="System.Drawing.Common" Version="8.0.3" />
+    </ItemGroup>
+    
+    <PropertyGroup>
+        <!-- This should be in sync with the TFMs of System.Drawing.Common -->
+        <TargetFramework>net6.0</TargetFramework>
+
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+        <PackageId>Blurhash.System.Drawing.Common</PackageId>
+        <Authors>Markus Palcer</Authors>
+        <Description>BlurHash is a compact representation of a placeholder for an image. This is the implementation for use with `System.Drawing.Common`.</Description>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <Copyright>Copyright 2019 Markus Palcer</Copyright>
+        <PackageTags>blurhash image preview compression encoding</PackageTags>
+        <PackageProjectUrl>https://github.com/MarkusPalcer/blurhash.net</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RootNamespace>System.Drawing.Blurhash</RootNamespace>
+    </PropertyGroup>
+
+    <Target Name="SetPackageVersion" BeforeTargets="GenerateNuspec;GetPackageVersion;_GetProjectReferenceVersions;GetAssemblyVersion;BeforeCompile">
+        <PropertyGroup>
+            <PackageVersion>@(PackageReference->WithMetadataValue('Identity', 'System.Drawing.Common')->Metadata('Version'))</PackageVersion>
+            <Version>$(PackageVersion)</Version>
+        </PropertyGroup>
+    </Target>
+</Project>
