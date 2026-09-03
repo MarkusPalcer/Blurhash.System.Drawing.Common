@@ -26,6 +26,6 @@ public class EncodingTests
         var targetImage = Blurhasher.Decode(BlurHash, 300, 200);
         targetImage.Width.Should().Be(300);
         targetImage.Height.Should().Be(200);
-        targetImage.Save("TestData/output.png");
+        targetImage.Save("output.png");
     }
 }

@@ -82,47 +82,37 @@ namespace System.Drawing.Blurhash
         /// <param name="outputWidth">The desired width of the output in pixels</param>
         /// <param name="outputHeight">The desired height of the output in pixels</param>
         /// <param name="punch">A value that affects the contrast of the decoded image. 1 means normal, smaller values will make the effect more subtle, and larger values will make it stronger.</param>
+        /// <param name="progress">A progress reporter</param>
         /// <returns>The decoded preview</returns>
         [ExcludeFromCodeCoverage]
-        public static Image Decode(string blurhash, int outputWidth, int outputHeight, double punch = 1.0)
+        public static unsafe Image Decode(string blurhash, int outputWidth, int outputHeight, double punch = 1.0,
+            IProgress<int>? progress = null)
         {
-            var pixelData = new Pixel[outputWidth, outputHeight];
-            Core.Decode(blurhash, pixelData, punch);
-            return ConvertToBitmap(pixelData);
-        }
+            var data = new byte[outputWidth * outputHeight * 4];
 
-        /// <summary>
-        /// Converts the library-independent representation of pixels into a bitmap
-        /// </summary>
-        /// <param name="pixelData">The library-independent representation of the image</param>
-        /// <returns>A <c>System.Drawing.Bitmap</c> in 32bpp-RGB representation</returns>
-        public static unsafe Bitmap ConvertToBitmap(Pixel[,] pixelData)
-        {
-            var width = pixelData.GetLength(0);
-            var height = pixelData.GetLength(1);
-
-            var data = new byte[width * height * 4];
-
-            var index = 0;
-            for (var yPixel = 0; yPixel < height; yPixel++)
-            for (var xPixel = 0; xPixel < width; xPixel++)
-            {
-                var pixel = pixelData[xPixel, yPixel];
-
-                data[index++] = (byte)MathUtils.LinearTosRgb(pixel.Blue);
-                data[index++] = (byte)MathUtils.LinearTosRgb(pixel.Green);
-                data[index++] = (byte)MathUtils.LinearTosRgb(pixel.Red);
-                data[index++] = 0;
-            }
+            var decoder = new StreamedDecoder(blurhash, outputWidth, outputHeight, ResultCallback, punch, progress);
+            decoder.Run();
 
             Bitmap bmp;
 
             fixed (byte* ptr = data)
             {
-                bmp = new Bitmap(width, height, width * 4, PixelFormat.Format32bppRgb, new IntPtr(ptr));
+                bmp = new Bitmap(outputWidth, outputHeight, outputWidth * 4, PixelFormat.Format32bppRgb, new IntPtr(ptr));
             }
-
+            
             return bmp;
+
+            void ResultCallback(ReadOnlySpan<StreamedPixel> buffer)
+            {
+                foreach (var streamedPixel in buffer)
+                {
+                    var index = (streamedPixel.Y * outputWidth + streamedPixel.X) * 4;
+                    data[index] = (byte)MathUtils.LinearTosRgb(streamedPixel.Blue);
+                    data[index + 1] = (byte)MathUtils.LinearTosRgb(streamedPixel.Green);
+                    data[index + 2] = (byte)MathUtils.LinearTosRgb(streamedPixel.Red);
+                    data[index + 3] = 0;
+                }
+            }
         }
     }
 }
