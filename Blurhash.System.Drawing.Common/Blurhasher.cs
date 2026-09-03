@@ -16,34 +16,39 @@ namespace System.Drawing.Blurhash
         /// <param name="componentsY">The number of components used on the Y-Axis for the DCT</param>
         /// <param name="progress">A progress reporter</param>
         /// <returns>The resulting Blurhash string</returns>
-        [ExcludeFromCodeCoverage(Justification = "Testing this would only test the constructor of System.Drawing.Bitmap and we trust the .NET-framework")]
-        public static unsafe string Encode(Image image, int componentsX, int componentsY, IProgress<int>? progress = null)
+        [ExcludeFromCodeCoverage(Justification =
+            "Testing this would only test the constructor of System.Drawing.Bitmap and we trust the .NET-framework")]
+        public static unsafe string Encode(Image image,
+            int componentsX,
+            int componentsY,
+            IProgress<int>? progress = null)
         {
             var width = image.Width;
             var height = image.Height;
-            
+
             if (image is not Bitmap { PixelFormat: PixelFormat.Format24bppRgb } temporaryBitmap)
             {
                 temporaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb);
-                
+
                 using var graphics = Graphics.FromImage(temporaryBitmap);
                 graphics.DrawImageUnscaled(image, 0, 0);
             }
 
             var encoder = new StreamedEncoder(componentsX, componentsY, width, height, progress);
-            
+
             BitmapData? bmpData = null;
             try
             {
                 // Lock the bitmap's bits.
-                bmpData = temporaryBitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, temporaryBitmap.PixelFormat);
+                bmpData = temporaryBitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly,
+                    temporaryBitmap.PixelFormat);
 
                 // Get the address of the first line.
                 var ptr = bmpData.Scan0;
 
                 var rgb = (byte*)ptr.ToPointer();
                 Span<StreamedPixel> buffer = stackalloc StreamedPixel[width];
-                
+
                 for (var y = 0; y < height; y++)
                 {
                     var index = bmpData.Stride * y;
@@ -54,8 +59,10 @@ namespace System.Drawing.Blurhash
                         res.Blue = MathUtils.SRgbToLinear(rgb[index++]);
                         res.Green = MathUtils.SRgbToLinear(rgb[index++]);
                         res.Red = MathUtils.SRgbToLinear(rgb[index++]);
+                        res.X = x;
+                        res.Y = y;
                     }
-                    
+
                     encoder.Process(buffer);
                 }
 
