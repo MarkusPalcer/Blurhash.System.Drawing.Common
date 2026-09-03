@@ -1,23 +1,71 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Drawing.Imaging;
+using System.Runtime.Versioning;
 using Blurhash;
 
 namespace System.Drawing.Blurhash
 {
+    [SupportedOSPlatform("windows")]
     public static class Blurhasher
     {
-        
         /// <summary>
         /// Encodes a picture into a Blurhash string
         /// </summary>
         /// <param name="image">The picture to encode</param>
         /// <param name="componentsX">The number of components used on the X-Axis for the DCT</param>
         /// <param name="componentsY">The number of components used on the Y-Axis for the DCT</param>
+        /// <param name="progress">A progress reporter</param>
         /// <returns>The resulting Blurhash string</returns>
         [ExcludeFromCodeCoverage(Justification = "Testing this would only test the constructor of System.Drawing.Bitmap and we trust the .NET-framework")]
-        public static string Encode(Image image, int componentsX, int componentsY)
+        public static unsafe string Encode(Image image, int componentsX, int componentsY, IProgress<int>? progress = null)
         {
-            return Core.Encode(ConvertBitmap(image as Bitmap ?? new Bitmap(image)), componentsX, componentsY);
+            var width = image.Width;
+            var height = image.Height;
+            
+            if (image is not Bitmap { PixelFormat: PixelFormat.Format24bppRgb } temporaryBitmap)
+            {
+                temporaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+                
+                using var graphics = Graphics.FromImage(temporaryBitmap);
+                graphics.DrawImageUnscaled(image, 0, 0);
+            }
+
+            var encoder = new StreamedEncoder(componentsX, componentsY, width, height, progress);
+            
+            BitmapData? bmpData = null;
+            try
+            {
+                // Lock the bitmap's bits.
+                bmpData = temporaryBitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, temporaryBitmap.PixelFormat);
+
+                // Get the address of the first line.
+                var ptr = bmpData.Scan0;
+
+                var rgb = (byte*)ptr.ToPointer();
+                Span<StreamedPixel> buffer = stackalloc StreamedPixel[width];
+                
+                for (var y = 0; y < height; y++)
+                {
+                    var index = bmpData.Stride * y;
+
+                    for (var x = 0; x < width; x++)
+                    {
+                        ref var res = ref buffer[x];
+                        res.Blue = MathUtils.SRgbToLinear(rgb[index++]);
+                        res.Green = MathUtils.SRgbToLinear(rgb[index++]);
+                        res.Red = MathUtils.SRgbToLinear(rgb[index++]);
+                    }
+                    
+                    encoder.Process(buffer);
+                }
+
+                return encoder.Finish();
+            }
+            finally
+            {
+                if (bmpData is not null) temporaryBitmap.UnlockBits(bmpData);
+                if (temporaryBitmap != image) temporaryBitmap.Dispose();
+            }
         }
 
         /// <summary>
@@ -34,50 +82,6 @@ namespace System.Drawing.Blurhash
             var pixelData = new Pixel[outputWidth, outputHeight];
             Core.Decode(blurhash, pixelData, punch);
             return ConvertToBitmap(pixelData);
-        }
-
-        /// <summary>
-        /// Converts the given bitmap to the library-independent representation used within the Blurhash-core
-        /// </summary>
-        /// <param name="sourceBitmap">The bitmap to encode</param>
-        public static unsafe Pixel[,] ConvertBitmap(Image sourceBitmap)
-        {
-            var width = sourceBitmap.Width;
-            var height = sourceBitmap.Height;
-
-            using (var temporaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
-            {
-                using (var graphics = Graphics.FromImage(temporaryBitmap))
-                {
-                    graphics.DrawImageUnscaled(sourceBitmap, 0, 0);
-                }
-
-                // Lock the bitmap's bits.
-                var bmpData = temporaryBitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, temporaryBitmap.PixelFormat);
-
-                // Get the address of the first line.
-                var ptr = bmpData.Scan0;
-
-                var result = new Pixel[width, height];
-
-                byte* rgb = (byte*)ptr.ToPointer();
-                for (var y = 0; y < height; y++)
-                {
-                    var index = bmpData.Stride * y;
-
-                    for (var x = 0; x < width; x++)
-                    {
-                        ref var res = ref result[x, y];
-                        res.Blue = MathUtils.SRgbToLinear(rgb[index++]);
-                        res.Green = MathUtils.SRgbToLinear(rgb[index++]);
-                        res.Red = MathUtils.SRgbToLinear(rgb[index++]);
-                    }
-                }
-
-                temporaryBitmap.UnlockBits(bmpData);
-
-                return result;
-            }
         }
 
         /// <summary>
