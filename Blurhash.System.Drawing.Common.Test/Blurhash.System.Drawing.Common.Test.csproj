@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-    <!-- This should be in sync with the TFMs of the tested project (sans the frameworks invalid for test projects) -->
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
